@@ -57,17 +57,16 @@ public class NativeImageProcessor extends AbstractProcessor {
 			if(r.siblings()) {
                 resourcesIncludes.add(addPatternObject("\\Q" + element.getEnclosingElement().toString().replace(".", "/") + "/.*\\E"));
 			}
-			else {
-                var v = r.value();
-                if(v.length == 0) {
+            var v = r.value();
+            if(v.length == 0) {
+                if(!r.siblings())
                     resourcesIncludes.add(addPatternObject("\\Q" + toClassName((TypeElement) element).replace(".", "/") + "/.*\\E"));
-                }
-                else {
-                    for (var pattern : v) {
-        				resourcesIncludes.add(addPatternObject("\\Q" + pattern + "\\E"));
-        			}
-                }
-			}
+            }
+            else {
+                for (var pattern : v) {
+    				resourcesIncludes.add(addPatternObject("\\Q" + pattern + "\\E"));
+    			}
+            }
 		}
 		for (var element : roundEnvironment.getElementsAnnotatedWith(Reflectable.class)) {
 			if (element.getKind() == ElementKind.CLASS || element.getKind() == ElementKind.INTERFACE)
