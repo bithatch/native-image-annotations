@@ -177,7 +177,8 @@ public class NativeImageProcessor extends AbstractProcessor {
             ifArray.add(l);
         }
         object.addProperty("name", cname);
-        object.add("locales", ifArray);
+        if(ifArray.size() > 0)
+            object.add("locales", ifArray);
         array.add(object);
     }
 
