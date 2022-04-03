@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.annotation.processing.SupportedSourceVersion;
@@ -19,6 +20,7 @@ import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic.Kind;
 import javax.tools.StandardLocation;
 
+import com.google.auto.service.AutoService;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -28,6 +30,7 @@ import com.google.gson.JsonObject;
 		"uk.co.bithatch.nativeimage.annotations.TypeReflect", "uk.co.bithatch.nativeimage.annotations.Query",
 		"uk.co.bithatch.nativeimage.annotations.Invoke" })
 @SupportedSourceVersion(SourceVersion.RELEASE_11)
+@AutoService(Processor.class)
 public class NativeImageProcessor extends AbstractProcessor {
 	public static final String RESOURCE_PATH = "META-INF/native-image/native-image-annotations/";
 	public static final String PROJECT_OPTION = "project";
@@ -47,10 +50,16 @@ public class NativeImageProcessor extends AbstractProcessor {
 		var resources = new JsonObject();
 		resources.add("includes", resourcesIncludes);
 		resourcesRoot.add("resources", resources);
+        var resourceBundles = new JsonArray();
+        resourcesRoot.add("bundles", resourceBundles);
 
 		for (var element : roundEnvironment.getElementsAnnotatedWith(Proxy.class)) {
-			addInterfaceToProxies(proxies, element.toString());
+			addInterfaceToProxies(proxies, toClassName((TypeElement)element));
 		}
+
+        for (var element : roundEnvironment.getElementsAnnotatedWith(Bundle.class)) {
+            addBundleToBundles(resourceBundles, (TypeElement)element);
+        }
 
 		for (var element : roundEnvironment.getElementsAnnotatedWith(Resource.class)) {
 			var r = element.getAnnotation(Resource.class);
@@ -109,7 +118,7 @@ public class NativeImageProcessor extends AbstractProcessor {
 				processingEnv.getMessager().printMessage(Kind.MANDATORY_WARNING,
 						"writing to: " + StandardLocation.CLASS_OUTPUT + "/" + path);
 				try (var w = new PrintWriter(classFile.openOutputStream())) {
-					w.println(gson.toJson(resources));
+					w.println(gson.toJson(resourcesRoot));
 				}
 			} catch (IOException e) {
 				throw new IllegalStateException("Could not write.", e);
@@ -142,6 +151,17 @@ public class NativeImageProcessor extends AbstractProcessor {
 		object.add("interfaces", ifArray);
 		array.add(object);
 	}
+
+    void addBundleToBundles(JsonArray array, TypeElement el) {
+        var object = new JsonObject();
+        var ifArray = new JsonArray();
+        for(var l : el.getAnnotation(Bundle.class).locales()) {
+            ifArray.add(l);   
+        }
+        object.addProperty("name", toClassName(el));
+        object.add("locales", ifArray);
+        array.add(object);
+    }
 
 	String toClassName(TypeElement el) {
 		Element p = el;

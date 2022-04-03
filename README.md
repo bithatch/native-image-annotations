@@ -139,6 +139,12 @@ Marks a `TYPE` as a Proxy type.
 
 Configuration will be added to `proxy-config.json`.
 
+#### @Bundle
+
+Adds an i18n resource bundle for a `TYPE`. A single attribute is supported, `locales()` which is an optional list of locales to include.
+
+For example, if the class `com.acme.MyObject` was annotated with `@Bundle`, then the default resource path of `com/acme/MyObject.properties` must exist. There can be optional resources such as `com/acme/MyObject_fr.properties` etc.
+
 #### @Resource
 
 Introduces classpath resources. Exact behaviour will depend on attributes used.
