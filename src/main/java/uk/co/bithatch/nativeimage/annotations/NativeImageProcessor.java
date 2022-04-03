@@ -122,7 +122,7 @@ public class NativeImageProcessor extends AbstractProcessor {
             }
         }
 
-        if (resources.size() > 0 && resourceBundles.size() > 0) {
+        if (resources.size() > 0 || resourceBundles.size() > 0) {
             var path = createRelativePath("resource-config.json");
             try {
                 var classFile = filer.createResource(StandardLocation.CLASS_OUTPUT, "", path);
