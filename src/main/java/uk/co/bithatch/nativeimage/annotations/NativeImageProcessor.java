@@ -28,7 +28,7 @@ import com.google.gson.JsonObject;
 @SupportedAnnotationTypes({ "uk.co.bithatch.nativeimage.annotations.Reflectable",
 		"uk.co.bithatch.nativeimage.annotations.Resource", "uk.co.bithatch.nativeimage.annotations.Proxy",
 		"uk.co.bithatch.nativeimage.annotations.TypeReflect", "uk.co.bithatch.nativeimage.annotations.Query",
-		"uk.co.bithatch.nativeimage.annotations.Invoke" })
+		"uk.co.bithatch.nativeimage.annotations.Invoke", "uk.co.bithatch.nativeimage.annotations.Bundle" })
 @SupportedSourceVersion(SourceVersion.RELEASE_11)
 @AutoService(Processor.class)
 public class NativeImageProcessor extends AbstractProcessor {
@@ -37,7 +37,7 @@ public class NativeImageProcessor extends AbstractProcessor {
 
 	@Override
 	public boolean process(Set<? extends TypeElement> typeElements, RoundEnvironment roundEnvironment) {
-		processingEnv.getMessager().printMessage(Kind.MANDATORY_WARNING,
+		processingEnv.getMessager().printMessage(Kind.NOTE,
 				"Processing native annotations in " + roundEnvironment.toString() + " / " + typeElements);
 
 		var gson = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
@@ -87,7 +87,7 @@ public class NativeImageProcessor extends AbstractProcessor {
 			var path = createRelativePath("reflect-config.json");
 			try {
 				var classFile = filer.createResource(StandardLocation.CLASS_OUTPUT, "", path);
-				processingEnv.getMessager().printMessage(Kind.MANDATORY_WARNING,
+				processingEnv.getMessager().printMessage(Kind.NOTE,
 						"writing to: " + StandardLocation.CLASS_OUTPUT + "/" + path);
 				try (var w = new PrintWriter(classFile.openOutputStream())) {
 					w.println(gson.toJson(reflection));
@@ -101,7 +101,7 @@ public class NativeImageProcessor extends AbstractProcessor {
 			var path = createRelativePath("proxy-config.json");
 			try {
 				var classFile = filer.createResource(StandardLocation.CLASS_OUTPUT, "", path);
-				processingEnv.getMessager().printMessage(Kind.MANDATORY_WARNING,
+				processingEnv.getMessager().printMessage(Kind.NOTE,
 						"writing to: " + StandardLocation.CLASS_OUTPUT + "/" + path);
 				try (var w = new PrintWriter(classFile.openOutputStream())) {
 					w.println(gson.toJson(proxies));
@@ -115,7 +115,7 @@ public class NativeImageProcessor extends AbstractProcessor {
 			var path = createRelativePath("resource-config.json");
 			try {
 				var classFile = filer.createResource(StandardLocation.CLASS_OUTPUT, "", path);
-				processingEnv.getMessager().printMessage(Kind.MANDATORY_WARNING,
+				processingEnv.getMessager().printMessage(Kind.NOTE,
 						"writing to: " + StandardLocation.CLASS_OUTPUT + "/" + path);
 				try (var w = new PrintWriter(classFile.openOutputStream())) {
 					w.println(gson.toJson(resourcesRoot));
