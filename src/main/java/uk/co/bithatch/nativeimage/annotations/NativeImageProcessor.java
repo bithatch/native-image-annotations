@@ -77,16 +77,16 @@ public class NativeImageProcessor extends AbstractProcessor {
             var r = element.getAnnotation(Resource.class);
             if (r.siblings()) {
                 resourcesIncludes.add(addPatternObject(roundEnvironment,
-                        "\\Q" + element.getEnclosingElement().toString().replace(".", "/") + "/.*\\E"));
+                        "/" + element.getEnclosingElement().toString().replace(".", "/") + "/.*"));
             }
             var v = r.value();
             if (v.length == 0) {
                 if (!r.siblings())
                     resourcesIncludes.add(addPatternObject(roundEnvironment,
-                            "\\Q" + toClassName((TypeElement) element).replace(".", "/") + "/.*\\E"));
+                            "/" + toClassName((TypeElement) element).replace(".", "/") + "/.*"));
             } else {
                 for (var pattern : v) {
-                    resourcesIncludes.add(addPatternObject(roundEnvironment, "\\Q" + pattern + "\\E"));
+                    resourcesIncludes.add(addPatternObject(roundEnvironment, pattern));
                 }
             }
         }
@@ -274,17 +274,18 @@ public class NativeImageProcessor extends AbstractProcessor {
         }
 
         var query = element.getAnnotation(Query.class);
-        if (query != null || reflectable.all() || typeReflect != null) {
-            if (reflectable.all() || (typeReflect != null && typeReflect.constructors())
+        var ref = reflectable != null && reflectable.all();
+        if (query != null || ref || typeReflect != null) {
+            if (ref || (typeReflect != null && typeReflect.constructors())
                     || (query != null && (query.all() || query.publicConstructors())))
                 object.addProperty("queryAllPublicConstructors", true);
-            if (reflectable.all() || (typeReflect != null && typeReflect.constructors())
+            if (ref || (typeReflect != null && typeReflect.constructors())
                     || (query != null && (query.all() || query.declaredConstructors())))
                 object.addProperty("queryAllDeclaredConstructors", true);
-            if (reflectable.all() || (typeReflect != null && typeReflect.methods())
+            if (ref || (typeReflect != null && typeReflect.methods())
                     || (query != null && (query.all() || query.publicMethods())))
                 object.addProperty("queryAllPublicMethods", true);
-            if (reflectable.all() || (typeReflect != null && typeReflect.methods())
+            if (ref || (typeReflect != null && typeReflect.methods())
                     || (query != null && (query.all() || query.declaredMethods())))
                 object.addProperty("queryAllDeclaredMethods", true);
         } else {
@@ -301,29 +302,29 @@ public class NativeImageProcessor extends AbstractProcessor {
         }
 
         var invoke = element.getAnnotation(Invoke.class);
-        if (invoke != null || reflectable.all() || typeReflect != null) {
-            if (reflectable.all() || (typeReflect != null && typeReflect.constructors())
+        if (invoke != null || ref || typeReflect != null) {
+            if (ref || (typeReflect != null && typeReflect.constructors())
                     || (invoke != null && (invoke.all() || invoke.publicConstructors())))
                 object.addProperty("allPublicConstructors", true);
-            if (reflectable.all() || (typeReflect != null && typeReflect.constructors())
+            if (ref || (typeReflect != null && typeReflect.constructors())
                     || (invoke != null && (invoke.all() || invoke.declaredConstructors())))
                 object.addProperty("allDeclaredConstructors", true);
-            if (reflectable.all() || (typeReflect != null && typeReflect.methods())
+            if (ref || (typeReflect != null && typeReflect.methods())
                     || (invoke != null && (invoke.all() || invoke.publicMethods())))
                 object.addProperty("allPublicMethods", true);
-            if (reflectable.all() || (typeReflect != null && typeReflect.methods())
+            if (ref || (typeReflect != null && typeReflect.methods())
                     || (invoke != null && (invoke.all() || invoke.declaredMethods())))
                 object.addProperty("allDeclaredMethods", true);
-            if (reflectable.all() || (typeReflect != null && typeReflect.fields())
+            if (ref || (typeReflect != null && typeReflect.fields())
                     || (invoke != null && (invoke.all() || invoke.publicFields())))
                 object.addProperty("allPublicFields", true);
-            if (reflectable.all() || (typeReflect != null && typeReflect.fields())
+            if (ref || (typeReflect != null && typeReflect.fields())
                     || (invoke != null && (invoke.all() || invoke.declaredFields())))
                 object.addProperty("allDeclaredFields", true);
-            if (reflectable.all() || (typeReflect != null && typeReflect.classes())
+            if (ref || (typeReflect != null && typeReflect.classes())
                     || (invoke != null && (invoke.all() || invoke.publicClasses())))
                 object.addProperty("allPublicClasses", true);
-            if (reflectable.all() || (typeReflect != null && typeReflect.classes())
+            if (ref || (typeReflect != null && typeReflect.classes())
                     || (invoke != null && (invoke.all() || invoke.declaredClasses())))
                 object.addProperty("allDeclaredClasses", true);
         } else {
