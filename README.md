@@ -139,6 +139,12 @@ Marks a `TYPE` as a Proxy type.
 
 Configuration will be added to `proxy-config.json`.
 
+#### @Serialization
+
+Marks a `TYPE` for serialization. 
+
+Configuration will be added to `serialization-config.json`.
+
 #### @Bundle
 
 Adds an i18n resource bundle for a `TYPE`. A single attribute is supported, `locales()` which is an optional list of locales to include.

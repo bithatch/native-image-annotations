@@ -1,5 +1,10 @@
 package uk.co.bithatch.nativeimage.annotations;
 
+import com.google.auto.service.AutoService;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Map;
@@ -9,8 +14,6 @@ import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.annotation.processing.SupportedSourceVersion;
-import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
@@ -19,20 +22,17 @@ import javax.lang.model.element.NestingKind;
 import javax.lang.model.element.TypeElement;
 import javax.tools.StandardLocation;
 
-import com.google.auto.service.AutoService;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-
 @SupportedAnnotationTypes({ "uk.co.bithatch.nativeimage.annotations.Reflectable",
         "uk.co.bithatch.nativeimage.annotations.Resource", "uk.co.bithatch.nativeimage.annotations.Proxy",
+        "uk.co.bithatch.nativeimage.annotations.Serialization",
         "uk.co.bithatch.nativeimage.annotations.TypeReflect", "uk.co.bithatch.nativeimage.annotations.Query",
         "uk.co.bithatch.nativeimage.annotations.Invoke", "uk.co.bithatch.nativeimage.annotations.Bundle" })
-@SupportedSourceVersion(SourceVersion.RELEASE_17)
+//@SupportedSourceVersion(SourceVersion.RELEASE_11)
 @AutoService(Processor.class)
 public class NativeImageProcessor extends AbstractProcessor {
-    public static final String RESOURCE_PATH = "META-INF/native-image/native-image-annotations/";
+    public static final String RESOURCE_PATH = "META-INF/native-image";
     public static final String PROJECT_OPTION = "project";
+    public static final String RESOURCE_PATH_OPTION = "path";
 
     @Override
     public boolean process(Set<? extends TypeElement> typeElements, RoundEnvironment roundEnvironment) {
@@ -45,6 +45,7 @@ public class NativeImageProcessor extends AbstractProcessor {
 
         var gson = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
         var proxies = new JsonArray();
+        var serials = new JsonArray();
         var resourcesRoot = new JsonObject();
         var reflection = new JsonArray();
 
@@ -52,11 +53,13 @@ public class NativeImageProcessor extends AbstractProcessor {
         var reflectableEls = roundEnvironment.getElementsAnnotatedWith(Reflectable.class);
         var bundleEls = roundEnvironment.getElementsAnnotatedWith(Bundle.class);
         var proxyEls = roundEnvironment.getElementsAnnotatedWith(Proxy.class);
+        var serialEls = roundEnvironment.getElementsAnnotatedWith(Serialization.class);
 
         printMessage(roundEnvironment, "  Resource elements: " + resourceEls.size());
         printMessage(roundEnvironment, "  Reflectable elements: " + reflectableEls.size());
         printMessage(roundEnvironment, "  Bundle elements: " + bundleEls.size());
         printMessage(roundEnvironment, "  Proxy elements: " + proxyEls.size());
+        printMessage(roundEnvironment, "  Serialization elements: " + serialEls.size());
 
         /* Default resources */
         var resourcesIncludes = new JsonArray();
@@ -68,6 +71,10 @@ public class NativeImageProcessor extends AbstractProcessor {
 
         for (var element : proxyEls) {
             addInterfaceToProxies(roundEnvironment, proxies, toClassName((TypeElement) element));
+        }
+
+        for (var element : serialEls) {
+            addNameToSerialization(roundEnvironment, serials, toClassName((TypeElement) element));
         }
 
         for (var element : bundleEls) {
@@ -122,6 +129,19 @@ public class NativeImageProcessor extends AbstractProcessor {
             }
         }
 
+        if (serials.size() > 0) {
+            var path = createRelativePath("serialization-config.json");
+            try {
+                var classFile = filer.createResource(StandardLocation.CLASS_OUTPUT, "", path);
+                printMessage(roundEnvironment, "Writing to: " + StandardLocation.CLASS_OUTPUT + "/" + path);
+                try (var w = new PrintWriter(classFile.openOutputStream())) {
+                    w.println(gson.toJson(serials));
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("Could not write.", e);
+            }
+        }
+
         if (resources.size() > 0 || resourceBundles.size() > 0) {
             var path = createRelativePath("resource-config.json");
             try {
@@ -152,9 +172,14 @@ public class NativeImageProcessor extends AbstractProcessor {
     protected String createRelativePath(String fileName) {
         Map<String, String> options = processingEnv.getOptions();
         String id = options.get(PROJECT_OPTION);
-        String relativeName = RESOURCE_PATH;
-        if (id != null) {
-            relativeName += id.replace('\\', '/') + "/";
+        if(id == null) {
+            id = "native-image-annotations";
+        }
+        String relativeName = options.get(RESOURCE_PATH_OPTION);
+        if(relativeName == null)
+            relativeName = RESOURCE_PATH;
+        if(!id.equals("")) {
+            relativeName += (relativeName.endsWith("/") ? "" : "/") + id.replace('\\', '/') + "/";
         }
         return relativeName + fileName;
     }
@@ -165,6 +190,13 @@ public class NativeImageProcessor extends AbstractProcessor {
         var ifArray = new JsonArray();
         ifArray.add(clazz);
         object.add("interfaces", ifArray);
+        array.add(object);
+    }
+
+    void addNameToSerialization(RoundEnvironment roundEnvironment, JsonArray array, String clazz) {
+        printMessage(roundEnvironment, "    Adding name " + clazz);
+        var object = new JsonObject();
+        object.addProperty("name", clazz.toString());
         array.add(object);
     }
 
