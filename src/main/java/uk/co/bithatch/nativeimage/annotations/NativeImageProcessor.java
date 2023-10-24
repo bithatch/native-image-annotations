@@ -22,6 +22,7 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.NestingKind;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
 import javax.tools.StandardLocation;
 
 @SupportedAnnotationTypes({ "uk.co.bithatch.nativeimage.annotations.Reflectable",
@@ -87,13 +88,13 @@ public class NativeImageProcessor extends AbstractProcessor {
             var r = element.getAnnotation(Resource.class);
             if (r.siblings()) {
                 resourcesIncludes.add(addPatternObject(roundEnvironment,
-                        "/" + element.getEnclosingElement().toString().replace(".", "/") + "/.*"));
+                        /* "/" + */element.getEnclosingElement().toString().replace(".", "/") + "/.*"));
             }
             var v = r.value();
             if (v.length == 0) {
                 if (!r.siblings())
                     resourcesIncludes.add(addPatternObject(roundEnvironment,
-                            "/" + toClassName((TypeElement) element).replace(".", "/") + "/.*"));
+                            /* "/" + */toClassName((TypeElement) element).replace(".", "/") + "/.*"));
             } else {
                 for (var pattern : v) {
                     resourcesIncludes.add(addPatternObject(roundEnvironment, pattern));
@@ -280,7 +281,7 @@ public class NativeImageProcessor extends AbstractProcessor {
         arr.add(m);
     }
 
-    void addFieldClassReflection(RoundEnvironment roundEnvironment, JsonObject classObject, ExecutableElement exec) {
+    void addFieldClassReflection(RoundEnvironment roundEnvironment, JsonObject classObject, VariableElement exec) {
         printMessage(roundEnvironment, "    Adding field" + exec.toString());
         if (!classObject.has("fields")) {
             classObject.add("fields", new JsonArray());
@@ -320,7 +321,7 @@ public class NativeImageProcessor extends AbstractProcessor {
             } else if (el.getKind() == ElementKind.FIELD) {
                 mth++;
                 if (el.getAnnotation(Reflectable.class) != null)
-                    addFieldClassReflection(roundEnvironment, object, (ExecutableElement) el);
+                    addFieldClassReflection(roundEnvironment, object, (VariableElement) el);
             } else if (el.getKind() == ElementKind.CLASS) {
                 clz++;
                 addClassToReflection(roundEnvironment, array, (TypeElement) el);
