@@ -94,7 +94,7 @@ public class NativeImageProcessor extends AbstractProcessor {
             if (v.length == 0) {
                 if (!r.siblings())
                     resourcesIncludes.add(addPatternObject(roundEnvironment,
-                            /* "/" + */toClassName((TypeElement) element).replace(".", "/") + "/.*"));
+                            /* "/" + */toClassName((TypeElement) element).replace(".", "/") + ".*\\.properties"));
             } else {
                 for (var pattern : v) {
                     resourcesIncludes.add(addPatternObject(roundEnvironment, pattern));
