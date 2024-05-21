@@ -23,19 +23,27 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.NestingKind;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.MirroredTypeException;
 import javax.tools.StandardLocation;
 
-@SupportedAnnotationTypes({ "uk.co.bithatch.nativeimage.annotations.Reflectable",
-        "uk.co.bithatch.nativeimage.annotations.Resource", "uk.co.bithatch.nativeimage.annotations.Proxy",
+@SupportedAnnotationTypes({ 
+		"uk.co.bithatch.nativeimage.annotations.Reflectable",
+        "uk.co.bithatch.nativeimage.annotations.Resource", 
+        "uk.co.bithatch.nativeimage.annotations.Proxy",
         "uk.co.bithatch.nativeimage.annotations.Serialization",
-        "uk.co.bithatch.nativeimage.annotations.TypeReflect", "uk.co.bithatch.nativeimage.annotations.Query",
-        "uk.co.bithatch.nativeimage.annotations.Invoke", "uk.co.bithatch.nativeimage.annotations.Bundle" })
+        "uk.co.bithatch.nativeimage.annotations.OtherReflectable",
+        "uk.co.bithatch.nativeimage.annotations.OtherReflectables",
+        "uk.co.bithatch.nativeimage.annotations.TypeReflect", 
+        "uk.co.bithatch.nativeimage.annotations.Query",
+        "uk.co.bithatch.nativeimage.annotations.Invoke", 
+        "uk.co.bithatch.nativeimage.annotations.Bundle" })
 //@SupportedSourceVersion(SourceVersion.RELEASE_11)
 @AutoService(Processor.class)
 public class NativeImageProcessor extends AbstractProcessor {
     public static final String RESOURCE_PATH = "META-INF/native-image";
     public static final String PROJECT_OPTION = "project";
     public static final String RESOURCE_PATH_OPTION = "path";
+    public static final String CLI_OPTIONS_OPTION = "cli-options";
 
     @Override
     public boolean process(Set<? extends TypeElement> typeElements, RoundEnvironment roundEnvironment) {
@@ -45,6 +53,8 @@ public class NativeImageProcessor extends AbstractProcessor {
             printMessage(roundEnvironment, "Nothing to process here.");
             return true;
         }
+        
+        var cliOptions = "true".equals(processingEnv.getOptions().get(CLI_OPTIONS_OPTION));
 
         var gson = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
         var proxies = new JsonArray();
@@ -55,6 +65,8 @@ public class NativeImageProcessor extends AbstractProcessor {
 
         var resourceEls = roundEnvironment.getElementsAnnotatedWith(Resource.class);
         var reflectableEls = roundEnvironment.getElementsAnnotatedWith(Reflectable.class);
+        var otherReflectableEls = roundEnvironment.getElementsAnnotatedWith(OtherReflectable.class);
+        var otherReflectablesEls = roundEnvironment.getElementsAnnotatedWith(OtherReflectables.class);
         var bundleEls = roundEnvironment.getElementsAnnotatedWith(Bundle.class);
         var proxyEls = roundEnvironment.getElementsAnnotatedWith(Proxy.class);
         var serialEls = roundEnvironment.getElementsAnnotatedWith(Serialization.class);
@@ -64,6 +76,8 @@ public class NativeImageProcessor extends AbstractProcessor {
         printMessage(roundEnvironment, "  Bundle elements: " + bundleEls.size());
         printMessage(roundEnvironment, "  Proxy elements: " + proxyEls.size());
         printMessage(roundEnvironment, "  Serialization elements: " + serialEls.size());
+        printMessage(roundEnvironment, "  Other single reflectable classes: " + otherReflectableEls.size());
+        printMessage(roundEnvironment, "  Other multiple reflectable classes: " + otherReflectablesEls.size());
 
         /* Default resources */
         var resourcesIncludes = new JsonArray();
@@ -84,26 +98,49 @@ public class NativeImageProcessor extends AbstractProcessor {
         for (var element : bundleEls) {
             addBundleToBundles(roundEnvironment, resourceBundles, (TypeElement) element);
         }
+        
         for (var element : resourceEls) {
             var r = element.getAnnotation(Resource.class);
             if (r.siblings()) {
                 resourcesIncludes.add(addPatternObject(roundEnvironment,
-                        /* "/" + */element.getEnclosingElement().toString().replace(".", "/") + "/.*"));
+                       element.getEnclosingElement().toString().replace(".", "/") + "/.*"));
             }
             var v = r.value();
             if (v.length == 0) {
                 if (!r.siblings())
                     resourcesIncludes.add(addPatternObject(roundEnvironment,
-                            /* "/" + */toClassName((TypeElement) element).replace(".", "/") + ".*\\.properties"));
+                            toClassName((TypeElement) element).replace(".", "/") + ".*\\..*"));
             } else {
                 for (var pattern : v) {
-                    resourcesIncludes.add(addPatternObject(roundEnvironment, pattern));
+                	if(pattern.startsWith("./")) {
+                		resourcesIncludes.add(addPatternObject(roundEnvironment, "\\Q" + toClassName((TypeElement) element).replace(".", "/") + "/" + pattern.substring(2) + "\\E"));
+                	}
+                	else {
+                		resourcesIncludes.add(addPatternObject(roundEnvironment, pattern));
+                	}
                 }
             }
         }
+        
         for (var element : reflectableEls) {
             if (element.getKind() == ElementKind.CLASS || element.getKind() == ElementKind.INTERFACE)
                 addClassToReflection(roundEnvironment, reflection, (TypeElement) element);
+        }
+        
+        for (var element : otherReflectablesEls) {
+            if (element.getKind() == ElementKind.CLASS || element.getKind() == ElementKind.INTERFACE) {
+            	var otherNative = element.getAnnotation(OtherReflectables.class);
+            	for(var ref : otherNative.value()) {
+            		addOtherToReflection(ref, roundEnvironment, reflection, (TypeElement) element);
+            	}
+            }
+        }
+        
+        for (var element : otherReflectableEls) {
+            if (element.getKind() == ElementKind.CLASS || element.getKind() == ElementKind.INTERFACE) {
+            	var otherNative = element.getAnnotation(OtherReflectable.class);
+                addOtherToReflection(otherNative, roundEnvironment, reflection, (TypeElement) element);
+            }
         }
 
         var filer = processingEnv.getFiler();
@@ -163,7 +200,7 @@ public class NativeImageProcessor extends AbstractProcessor {
             args.add("-H:ResourceConfigurationResources=${.}/resource-config.json");
         }
         
-        if(args.size() > 0) {
+        if(cliOptions && args.size() > 0) {
             var path = createRelativePath("native-image.properties");
             var props = new Properties();
             try {
@@ -292,12 +329,37 @@ public class NativeImageProcessor extends AbstractProcessor {
         arr.add(m);
     }
 
+    void addOtherToReflection(OtherReflectable otherNative, RoundEnvironment roundEnvironment, JsonArray array, TypeElement element) {
+    	var typeReflect = otherNative.annotationType().getAnnotation(TypeReflect.class);
+    	var query = otherNative.annotationType().getAnnotation(Query.class);
+        var invoke = element.getAnnotation(Invoke.class);
+    	
+    	String cname;
+    	try {
+        	var clazz = otherNative.value();
+    		cname = clazz.getName();
+    	}
+    	catch(MirroredTypeException mte) {
+    		cname = mte.getTypeMirror().toString();
+    	}
+		var reflectAll = otherNative.all();
+        printMessage(roundEnvironment, "    Adding class " + cname.toString());
+        var object = new JsonObject();
+        object.addProperty("name", cname);
+        array.add(object);
+        addReflectable(typeReflect, query, invoke, object, reflectAll);
+    }
+
     void addClassToReflection(RoundEnvironment roundEnvironment, JsonArray array, TypeElement element) {
         var cname = toClassName(element);
         printMessage(roundEnvironment, "    Adding class " + cname.toString());
         var reflectable = element.getAnnotation(Reflectable.class);
         var typeReflect = element.getAnnotation(TypeReflect.class);
+        var query = element.getAnnotation(Query.class);
+        var invoke = element.getAnnotation(Invoke.class);
         var object = new JsonObject();
+        var ref = reflectable != null && reflectable.all();
+        
         object.addProperty("name", cname);
         array.add(object);
         int cons = 0;
@@ -328,19 +390,21 @@ public class NativeImageProcessor extends AbstractProcessor {
             }
         }
 
-        var query = element.getAnnotation(Query.class);
-        var ref = reflectable != null && reflectable.all();
-        if (query != null || ref || typeReflect != null) {
-            if (ref || (typeReflect != null && typeReflect.constructors())
+        addReflectable(typeReflect, query, invoke, object, ref);
+    }
+
+	private void addReflectable(TypeReflect typeReflect, Query query, Invoke invoke, JsonObject object, boolean reflectAll) {
+		if (query != null || reflectAll || typeReflect != null) {
+            if (reflectAll || (typeReflect != null && typeReflect.constructors())
                     || (query != null && (query.all() || query.publicConstructors())))
                 object.addProperty("queryAllPublicConstructors", true);
-            if (ref || (typeReflect != null && typeReflect.constructors())
+            if (reflectAll || (typeReflect != null && typeReflect.constructors())
                     || (query != null && (query.all() || query.declaredConstructors())))
                 object.addProperty("queryAllDeclaredConstructors", true);
-            if (ref || (typeReflect != null && typeReflect.methods())
+            if (reflectAll || (typeReflect != null && typeReflect.methods())
                     || (query != null && (query.all() || query.publicMethods())))
                 object.addProperty("queryAllPublicMethods", true);
-            if (ref || (typeReflect != null && typeReflect.methods())
+            if (reflectAll || (typeReflect != null && typeReflect.methods())
                     || (query != null && (query.all() || query.declaredMethods())))
                 object.addProperty("queryAllDeclaredMethods", true);
         } else {
@@ -356,30 +420,29 @@ public class NativeImageProcessor extends AbstractProcessor {
 //			}
         }
 
-        var invoke = element.getAnnotation(Invoke.class);
-        if (invoke != null || ref || typeReflect != null) {
-            if (ref || (typeReflect != null && typeReflect.constructors())
+        if (invoke != null || reflectAll || typeReflect != null) {
+            if (reflectAll || (typeReflect != null && typeReflect.constructors())
                     || (invoke != null && (invoke.all() || invoke.publicConstructors())))
                 object.addProperty("allPublicConstructors", true);
-            if (ref || (typeReflect != null && typeReflect.constructors())
+            if (reflectAll || (typeReflect != null && typeReflect.constructors())
                     || (invoke != null && (invoke.all() || invoke.declaredConstructors())))
                 object.addProperty("allDeclaredConstructors", true);
-            if (ref || (typeReflect != null && typeReflect.methods())
+            if (reflectAll || (typeReflect != null && typeReflect.methods())
                     || (invoke != null && (invoke.all() || invoke.publicMethods())))
                 object.addProperty("allPublicMethods", true);
-            if (ref || (typeReflect != null && typeReflect.methods())
+            if (reflectAll || (typeReflect != null && typeReflect.methods())
                     || (invoke != null && (invoke.all() || invoke.declaredMethods())))
                 object.addProperty("allDeclaredMethods", true);
-            if (ref || (typeReflect != null && typeReflect.fields())
+            if (reflectAll || (typeReflect != null && typeReflect.fields())
                     || (invoke != null && (invoke.all() || invoke.publicFields())))
                 object.addProperty("allPublicFields", true);
-            if (ref || (typeReflect != null && typeReflect.fields())
+            if (reflectAll || (typeReflect != null && typeReflect.fields())
                     || (invoke != null && (invoke.all() || invoke.declaredFields())))
                 object.addProperty("allDeclaredFields", true);
-            if (ref || (typeReflect != null && typeReflect.classes())
+            if (reflectAll || (typeReflect != null && typeReflect.classes())
                     || (invoke != null && (invoke.all() || invoke.publicClasses())))
                 object.addProperty("allPublicClasses", true);
-            if (ref || (typeReflect != null && typeReflect.classes())
+            if (reflectAll || (typeReflect != null && typeReflect.classes())
                     || (invoke != null && (invoke.all() || invoke.declaredClasses())))
                 object.addProperty("allDeclaredClasses", true);
         } else {
@@ -390,5 +453,5 @@ public class NativeImageProcessor extends AbstractProcessor {
             // object.addProperty("allDeclaredClasses", true);
             // }
         }
-    }
+	}
 }
