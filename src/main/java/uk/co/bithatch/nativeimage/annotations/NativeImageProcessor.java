@@ -280,7 +280,7 @@ public class NativeImageProcessor extends AbstractProcessor {
 
         /* Look for the package */
         while (p != null) {
-            if (p.getKind() != ElementKind.CLASS && p.getKind() != ElementKind.INTERFACE)
+            if (p.getKind() != ElementKind.CLASS && p.getKind() != ElementKind.INTERFACE && p.getKind() != ElementKind.ENUM)
                 break;
 
             TypeElement e = (TypeElement) p;
