@@ -1,10 +1,5 @@
 package uk.co.bithatch.nativeimage.annotations;
 
-import com.google.auto.service.AutoService;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -25,6 +20,11 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.MirroredTypeException;
 import javax.tools.StandardLocation;
+
+import com.google.auto.service.AutoService;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 
 @SupportedAnnotationTypes({ 
 		"uk.co.bithatch.nativeimage.annotations.Reflectable",
@@ -70,6 +70,8 @@ public class NativeImageProcessor extends AbstractProcessor {
         var bundleEls = roundEnvironment.getElementsAnnotatedWith(Bundle.class);
         var proxyEls = roundEnvironment.getElementsAnnotatedWith(Proxy.class);
         var serialEls = roundEnvironment.getElementsAnnotatedWith(Serialization.class);
+        var otherSerialEls = roundEnvironment.getElementsAnnotatedWith(OtherSerializable.class);
+        var otherSerialsEls = roundEnvironment.getElementsAnnotatedWith(OtherSerializables.class);
 
         printMessage(roundEnvironment, "  Resource elements: " + resourceEls.size());
         printMessage(roundEnvironment, "  Reflectable elements: " + reflectableEls.size());
@@ -78,6 +80,8 @@ public class NativeImageProcessor extends AbstractProcessor {
         printMessage(roundEnvironment, "  Serialization elements: " + serialEls.size());
         printMessage(roundEnvironment, "  Other single reflectable classes: " + otherReflectableEls.size());
         printMessage(roundEnvironment, "  Other multiple reflectable classes: " + otherReflectablesEls.size());
+        printMessage(roundEnvironment, "  Other single serializable classes: " + otherSerialEls.size());
+        printMessage(roundEnvironment, "  Other multiple serializable classes: " + otherSerialsEls.size());
 
         /* Default resources */
         var resourcesIncludes = new JsonArray();
@@ -125,6 +129,23 @@ public class NativeImageProcessor extends AbstractProcessor {
         for (var element : reflectableEls) {
             if (element.getKind() == ElementKind.CLASS || element.getKind() == ElementKind.INTERFACE)
                 addClassToReflection(roundEnvironment, reflection, (TypeElement) element);
+        }
+        
+        for (var element : otherSerialsEls) {
+            if (element.getKind() == ElementKind.CLASS || element.getKind() == ElementKind.INTERFACE || element.getKind() == ElementKind.ENUM) {
+            	var otherNative = element.getAnnotation(OtherSerializables.class);
+            	var el = element.getEnclosedElements().iterator();
+            	for(var ref : otherNative.value()) {
+            		addOtherToSerialization(ref, roundEnvironment, serials, (TypeElement) el.next());
+            	}
+            }
+        }
+        
+        for (var element : otherSerialEls) {
+            if (element.getKind() == ElementKind.CLASS || element.getKind() == ElementKind.INTERFACE || element.getKind() == ElementKind.ENUM) {
+            	var otherNative = element.getAnnotation(OtherSerializable.class);
+        		addOtherToSerialization(otherNative, roundEnvironment, serials, (TypeElement) element);
+            }
         }
         
         for (var element : otherReflectablesEls) {
@@ -329,6 +350,19 @@ public class NativeImageProcessor extends AbstractProcessor {
         arr.add(m);
     }
 
+    void addOtherToSerialization(OtherSerializable otherNative, RoundEnvironment roundEnvironment, JsonArray array, TypeElement element) {
+    	String cname;
+    	try {
+        	var clazz = otherNative.value();
+    		cname = clazz.getName();
+    	}
+    	catch(MirroredTypeException mte) {
+    		cname = mte.getTypeMirror().toString();
+    	}
+    	
+    	addNameToSerialization(roundEnvironment, array, cname);
+    }
+
     void addOtherToReflection(OtherReflectable otherNative, RoundEnvironment roundEnvironment, JsonArray array, TypeElement element) {
     	var typeReflect = otherNative.annotationType().getAnnotation(TypeReflect.class);
     	var query = otherNative.annotationType().getAnnotation(Query.class);
@@ -454,4 +488,5 @@ public class NativeImageProcessor extends AbstractProcessor {
             // }
         }
 	}
+
 }
